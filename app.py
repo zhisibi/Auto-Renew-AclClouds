@@ -153,7 +153,7 @@ def dedupe_project_cards(cards):
         name = ''
         for line in text.splitlines():
             line = line.strip()
-            if line and not re.search(r'expires|renewal|renew|expiry|expire|valid|续期|过期|到期', line, re.I):
+            if line and not re.search(r'expires|renewal|renew|reactivate|suspended|expiry|expire|valid|续期|重新激活|恢复|暂停|过期|到期', line, re.I):
                 name = line
                 break
         signature = (name.lower(), get_project_expiry(card).lower())
@@ -172,9 +172,9 @@ def find_renew_buttons(root):
     selectors = [
         '.projects-renew-btn',
         './/button[contains(translate(normalize-space(.), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "renew")]',
+        './/button[contains(translate(normalize-space(.), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "reactivate")]',
         './/*[(@role="button" or self::a) and contains(translate(normalize-space(.), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "renew")]',
-        './/button[contains(normalize-space(.), "续期")]',
-        './/*[(@role="button" or self::a) and contains(normalize-space(.), "续期")]',
+        './/*[(@role="button" or self::a) and contains(translate(normalize-space(.), "ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz"), "reactivate")]',
     ]
     buttons = []
     for selector in selectors:
@@ -192,7 +192,7 @@ def find_card_container_from_child(sb, child):
         for (let i = 0; node && i < 10; i += 1, node = node.parentElement) {
           const text = (node.innerText || '').trim();
           const cls = (node.className || '').toString().toLowerCase();
-          const looksLikeProject = /renew|expiry|expire|expires|valid|续期|过期|到期/i.test(text);
+          const looksLikeProject = /renew|reactivate|suspended|expiry|expire|expires|valid|续期|重新激活|恢复|暂停|过期|到期/i.test(text);
           const looksLikeCard = /card|project|service|server|item|row/.test(cls);
           if (node !== start && text.length > 20 && (looksLikeProject || looksLikeCard)) {
             return node;
@@ -218,7 +218,7 @@ def find_project_cards(sb):
         try:
             for card in sb.driver.find_elements(By.CSS_SELECTOR, selector):
                 text = element_text(card).lower()
-                if any(keyword in text for keyword in ['renew', 'expiry', 'expire', 'valid', '续期', '过期', '到期']):
+                if any(keyword in text for keyword in ['renew', 'reactivate', 'suspended', 'expiry', 'expire', 'valid', '续期', '重新激活', '恢复', '暂停', '过期', '到期']):
                     cards.append(card)
         except Exception:
             continue
@@ -306,7 +306,7 @@ def get_project_name(card, idx):
 
     for line in element_text(card).splitlines():
         line = line.strip()
-        if line and len(line) <= 80 and not extract_duration_like(line) and not re.search(r'renew|expiry|expire|valid|续期|过期|到期', line, re.I):
+        if line and len(line) <= 80 and not extract_duration_like(line) and not re.search(r'renew|reactivate|suspended|expiry|expire|valid|续期|重新激活|恢复|暂停|过期|到期', line, re.I):
             return line
     return f"项目 #{idx}"
 
@@ -402,6 +402,13 @@ def get_renew_note(card):
         except Exception:
             continue
     return '未到续期时间'
+
+def get_action_button_label(button):
+    text = element_text(button)
+    lowered = text.lower()
+    if 'reactivate' in lowered or '重新激活' in text or '恢复' in text:
+        return 'Reactivate'
+    return 'Renew'
 
 def log_projects_page_diagnostics(sb):
     current_url = sb.get_current_url()
@@ -711,8 +718,9 @@ def main():
                 renew_btn = find_renew_buttons(card)
 
                 if renew_btn:
-                    safe_click_element(sb, renew_btn[0], f"[{project_name}] Renew按钮")
-                    print(f"[{project_name}] 点击 Renew...")
+                    action_label = get_action_button_label(renew_btn[0])
+                    safe_click_element(sb, renew_btn[0], f"[{project_name}] {action_label}按钮")
+                    print(f"[{project_name}] 点击 {action_label}...")
                     handle_renew_antibot(sb, project_name)
                     success, new_expiry, result_note = wait_for_renew_result(sb, idx, timeout=30)
                     if success:
